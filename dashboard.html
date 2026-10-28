@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storm Tracker · Boca Raton</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #eaf2fb;
+    --surface-1: #fbfdff;
+    --border: #d3e2f4;
+    --grid: #e2ecf8;
+    --axis: #aac0de;
+    --text-primary: #0b2545;
+    --text-secondary: #355a85;
+    --text-muted: #557196;
+    --accent: #1d4ed8;
+    --accent-fg: #ffffff;
+    --blue-temp: #1d4ed8;
+    --blue-hum: #0369a1;
+    --blue-pres: #1e3a8a;
+    --blue-rain: #0e7490;
+    --good: #0ca30c;
+    --critical: #d03b3b;
+    --tooltip-bg: #0b2545;
+    --tooltip-fg: #eaf2fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #08152a;
+      --surface-1: #0f2140;
+      --border: #1c3560;
+      --grid: #172c50;
+      --axis: #2d4c7c;
+      --text-primary: #e6f0fc;
+      --text-secondary: #a8c2e4;
+      --text-muted: #7792b8;
+      --accent: #60a5fa;
+      --accent-fg: #08152a;
+      --blue-temp: #60a5fa;
+      --blue-hum: #38bdf8;
+      --blue-pres: #a5b8fc;
+      --blue-rain: #22d3ee;
+      --tooltip-bg: #e6f0fc;
+      --tooltip-fg: #0b2545;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #08152a;
+    --surface-1: #0f2140;
+    --border: #1c3560;
+    --grid: #172c50;
+    --axis: #2d4c7c;
+    --text-primary: #e6f0fc;
+    --text-secondary: #a8c2e4;
+    --text-muted: #7792b8;
+    --accent: #60a5fa;
+    --accent-fg: #08152a;
+    --blue-temp: #60a5fa;
+    --blue-hum: #38bdf8;
+    --blue-pres: #a5b8fc;
+    --blue-rain: #22d3ee;
+    --tooltip-bg: #e6f0fc;
+    --tooltip-fg: #0b2545;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font: 14px/1.4 "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-bottom: 20px; }
+  h1 { font-size: 22px; margin: 0; font-weight: 800; letter-spacing: -0.02em; color: var(--accent); }
+  .subtitle { margin: 2px 0 0; color: var(--text-secondary); font-size: 13px; }
+  .subtitle b { color: var(--text-primary); font-weight: 600; }
+  .subtitle a { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .subtitle a:hover { text-decoration: underline; }
+  html { scroll-behavior: smooth; }
+
+  /* Each measurement gets its own shade of blue */
+  [data-key="temp"]     { --series: var(--blue-temp); }
+  [data-key="humidity"] { --series: var(--blue-hum); }
+  [data-key="pressure"] { --series: var(--blue-pres); }
+  [data-key="rain_pct"] { --series: var(--blue-rain); }
+  .tile { border-top: 3px solid var(--series, var(--accent)); }
+  .tile .value { color: var(--series, var(--text-primary)); }
+  .conn { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 13px; }
+  .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+  .conn.live .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+  .conn.down .dot { background: var(--critical); }
+  .controls { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface-1); }
+  .seg button {
+    border: 0; background: transparent; color: var(--text-secondary); font: inherit; font-size: 13px;
+    padding: 6px 10px; cursor: pointer; min-height: 32px;
+  }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+
+  .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .tile, .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
+  .tile { padding: 14px 16px; }
+  .tile .label { color: var(--text-secondary); font-size: 13px; }
+  .tile .value { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; margin-top: 2px; }
+  .tile .value small { font-size: 16px; font-weight: 500; color: var(--text-secondary); margin-left: 2px; }
+  .tile .sub { color: var(--text-muted); font-size: 12px; margin-top: 2px; min-height: 17px; }
+
+  .charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .card { padding: 14px 16px 8px; position: relative; }
+  .card h2 { font-size: 14px; font-weight: 600; margin: 0; }
+  .card .unit { color: var(--text-muted); font-weight: 400; }
+  .chart { position: relative; height: 200px; margin-top: 8px; }
+  .chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .chart text { fill: var(--text-muted); font-size: 11px; }
+  .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-muted); font-size: 13px; }
+
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--tooltip-bg); color: var(--tooltip-fg);
+    font-size: 12px; padding: 6px 8px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, -100%);
+    opacity: 0; transition: opacity .08s;
+  }
+  .tooltip b { font-weight: 600; font-size: 13px; }
+
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; padding: 6px 0; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; font-size: 13px; }
+  th, td { text-align: right; padding: 6px 12px; border-bottom: 1px solid var(--grid); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--text-secondary); font-weight: 500; }
+  .table-wrap { overflow-x: auto; }
+  .raw { margin-top: 16px; color: var(--text-muted); font: 12px ui-monospace, Menlo, monospace; overflow-wrap: anywhere; }
+
+  .about { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; margin-top: 24px; }
+  .about .card { padding: 18px 20px; }
+  .about h2 { font-size: 16px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+  .about p, .about li { color: var(--text-secondary); font-size: 14px; line-height: 1.6; }
+  .about p { margin: 0 0 10px; }
+  .about p:last-child { margin-bottom: 0; }
+  .about b { color: var(--text-primary); font-weight: 600; }
+  .about ul { margin: 0 0 10px; padding-left: 18px; }
+  .about li::marker { color: var(--accent); }
+  .about .note { color: var(--text-muted); font-size: 13px; }
+
+  @media (max-width: 820px) {
+    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .charts { grid-template-columns: minmax(0, 1fr); }
+    .about { grid-template-columns: minmax(0, 1fr); }
+    .controls { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Storm Tracker</h1>
+      <p class="subtitle">Weather station by <b>Emily Geguzinskas</b> · Boca Raton, Florida · <a href="#about">About me</a></p>
+    </div>
+    <span class="conn" id="conn"><span class="dot"></span><span id="connText">Connecting…</span></span>
+    <div class="controls">
+      <div class="seg" id="range" role="group" aria-label="Time range">
+        <button data-min="15" aria-pressed="false">15m</button>
+        <button data-min="60" aria-pressed="true">1h</button>
+        <button data-min="360" aria-pressed="false">6h</button>
+        <button data-min="1440" aria-pressed="false">24h</button>
+        <button data-min="0" aria-pressed="false">All</button>
+      </div>
+      <div class="seg" id="units" role="group" aria-label="Temperature unit">
+        <button data-u="c" aria-pressed="false">°C</button>
+        <button data-u="f" aria-pressed="true">°F</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="tiles">
+    <div class="tile" data-key="temp"><div class="label">Temperature</div><div class="value" id="vTemp">–</div><div class="sub" id="sTemp"></div></div>
+    <div class="tile" data-key="humidity"><div class="label">Humidity</div><div class="value" id="vHum">–</div><div class="sub" id="sHum"></div></div>
+    <div class="tile" data-key="pressure"><div class="label">Pressure</div><div class="value" id="vPres">–</div><div class="sub" id="sPres"></div></div>
+    <div class="tile" data-key="rain_pct"><div class="label">Rain</div><div class="value" id="vRain">–</div><div class="sub" id="sRain"></div></div>
+  </section>
+
+  <section class="charts">
+    <div class="card"><h2>Temperature <span class="unit" id="tempUnit">°F</span></h2><div class="chart" data-key="temp"></div></div>
+    <div class="card"><h2>Humidity <span class="unit">%</span></h2><div class="chart" data-key="humidity"></div></div>
+    <div class="card"><h2>Pressure <span class="unit">hPa</span></h2><div class="chart" data-key="pressure"></div></div>
+    <div class="card"><h2>Rain sensor <span class="unit">% wet</span></h2><div class="chart" data-key="rain_pct"></div></div>
+  </section>
+
+  <details>
+    <summary>Show recent readings as a table</summary>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Time</th><th>Temp</th><th>Humidity</th><th>Pressure</th><th>Rain</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table></div>
+  </details>
+
+  <section class="about" id="about">
+    <div class="card about-me">
+      <h2>About me</h2>
+      <p>Hi, I'm <b>Emily Geguzinskas</b>. I built this weather station in Boca Raton, Florida, to keep an eye on
+        local conditions and the storms that roll through South Florida.</p>
+      <p>Everything on this page comes straight from my own sensors, updated every few seconds. Use the buttons at
+        the top to look back over the last 15 minutes up to the whole recording, and hover over a chart to see
+        exact readings.</p>
+    </div>
+    <div class="card about-station">
+      <h2>How the station works</h2>
+      <ul>
+        <li><b>Brain:</b> an ESP32 microcontroller running MicroPython</li>
+        <li><b>Temperature &amp; pressure:</b> BMP280 sensor</li>
+        <li><b>Humidity:</b> DHT11 sensor</li>
+        <li><b>Rain:</b> a rain-drop plate that senses water on its surface</li>
+        <li><b>Display:</b> a small OLED screen on the station shows the latest readings</li>
+      </ul>
+      <p class="note">A reading is taken every 2 seconds and sent to this website.</p>
+    </div>
+  </section>
+
+  <div class="raw" id="raw"></div>
+</main>
+
+<script>
+const readings = [];
+let rangeMin = 60;
+let unit = "f";
+let hoverT = null;
+
+const SERIES = {
+  temp:     { get: r => unit === "f" ? r.temp_f : r.temp_c, fmt: v => v.toFixed(1), suffix: () => unit === "f" ? "°F" : "°C", minSpan: 2 },
+  humidity: { get: r => r.humidity, fmt: v => v.toFixed(0), suffix: () => "%", minSpan: 5, floor: 0, ceil: 100 },
+  pressure: { get: r => r.pressure, fmt: v => v.toFixed(1), suffix: () => " hPa", minSpan: 2 },
+  rain_pct: { get: r => r.rain_pct, fmt: v => v.toFixed(0), suffix: () => "%", minSpan: 10, floor: 0, ceil: 100, area: true },
+};
+
+const $ = id => document.getElementById(id);
+const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+const timeFmtSec = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" });
+
+function visible() {
+  if (!rangeMin || !readings.length) return readings;
+  const cutoff = readings[readings.length - 1].t - rangeMin * 60;
+  let lo = 0, hi = readings.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; readings[m].t < cutoff ? lo = m + 1 : hi = m; }
+  return readings.slice(lo);
+}
+
+// Average into at most ~maxPts buckets so long ranges stay fast.
+function downsample(data, get, maxPts) {
+  if (data.length <= maxPts) return data.map(r => ({ t: r.t, v: get(r) }));
+  const t0 = data[0].t, span = data[data.length - 1].t - t0 || 1, out = [];
+  let bucket = -1, sumT = 0, sumV = 0, n = 0;
+  for (const r of data) {
+    const b = Math.floor((r.t - t0) / span * maxPts);
+    if (b !== bucket && n) { out.push({ t: sumT / n, v: sumV / n }); sumT = sumV = n = 0; }
+    bucket = b; sumT += r.t; sumV += get(r); n++;
+  }
+  if (n) out.push({ t: sumT / n, v: sumV / n });
+  return out;
+}
+
+function niceTicks(min, max, count) {
+  const step0 = (max - min) / count, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= step0) || step0;
+  const ticks = [];
+  for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) ticks.push(+v.toFixed(6));
+  return { ticks, step };
+}
+
+function drawChart(el) {
+  const key = el.dataset.key, s = SERIES[key];
+  const W = el.clientWidth, H = el.clientHeight;
+  const m = { l: 40, r: 8, t: 8, b: 22 };
+  const data = visible();
+  if (!data.length) { el.innerHTML = '<div class="empty">Waiting for readings…</div>'; return; }
+
+  const pts = downsample(data, s.get, Math.max(50, Math.floor(W / 2)));
+  let lo = Math.min(...pts.map(p => p.v)), hi = Math.max(...pts.map(p => p.v));
+  if (hi - lo < s.minSpan) { const mid = (hi + lo) / 2; lo = mid - s.minSpan / 2; hi = mid + s.minSpan / 2; }
+  if (s.floor !== undefined) lo = Math.max(s.floor, lo); if (s.ceil !== undefined) hi = Math.min(s.ceil, hi);
+  if (s.area) lo = 0;
+  const { ticks, step } = niceTicks(lo, hi, 4);
+  lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
+  if (ticks[0] > lo + 1e-9) ticks.unshift(+(ticks[0] - step).toFixed(6)), lo = ticks[0];
+
+  const t0 = rangeMin ? data[data.length - 1].t - rangeMin * 60 : data[0].t;
+  const t1 = data[data.length - 1].t;
+  const x = t => m.l + (t - t0) / Math.max(1, t1 - t0) * (W - m.l - m.r);
+  const y = v => m.t + (1 - (v - lo) / (hi - lo || 1)) * (H - m.t - m.b);
+
+  // Break the line where the board was disconnected (gap > 30 s or 3 average intervals).
+  const gap = Math.max(30, rangeMin * 60 / 200);
+  const segs = []; let cur = [];
+  pts.forEach((p, i) => { if (i && p.t - pts[i - 1].t > gap && cur.length) { segs.push(cur); cur = []; } cur.push(p); });
+  if (cur.length) segs.push(cur);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${key} over time">`;
+  for (const tv of ticks) {
+    svg += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(tv)}" y2="${y(tv)}" stroke="var(--grid)" stroke-width="1"/>`;
+    svg += `<text x="${m.l - 6}" y="${y(tv) + 4}" text-anchor="end">${+tv.toFixed(2)}</text>`;
+  }
+  svg += `<line x1="${m.l}" x2="${W - m.r}" y1="${H - m.b}" y2="${H - m.b}" stroke="var(--axis)"/>`;
+  const nX = Math.max(2, Math.floor((W - m.l - m.r) / 110));
+  for (let i = 0; i <= nX; i++) {
+    const t = t0 + (t1 - t0) * i / nX;
+    const anchor = i === 0 ? "start" : i === nX ? "end" : "middle";
+    svg += `<text x="${x(t)}" y="${H - 6}" text-anchor="${anchor}">${(t1 - t0 < 600 ? timeFmtSec : timeFmt).format(t * 1000)}</text>`;
+  }
+  for (const sg of segs) {
+    const d = sg.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
+    if (s.area) svg += `<path d="${d}L${x(sg[sg.length - 1].t)},${y(lo)}L${x(sg[0].t)},${y(lo)}Z" fill="var(--series)" fill-opacity="0.12"/>`;
+    svg += `<path d="${d}" fill="none" stroke="var(--series)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+  const last = pts[pts.length - 1];
+  svg += `<circle cx="${x(last.t)}" cy="${y(last.v)}" r="4" fill="var(--series)" stroke="var(--surface-1)" stroke-width="2"/>`;
+
+  // Hover layer (synced across charts by timestamp).
+  let tip = "";
+  if (hoverT !== null && hoverT >= t0) {
+    let best = pts[0];
+    for (const p of pts) if (Math.abs(p.t - hoverT) < Math.abs(best.t - hoverT)) best = p;
+    const hx = x(best.t), hy = y(best.v);
+    svg += `<line x1="${hx}" x2="${hx}" y1="${m.t}" y2="${H - m.b}" stroke="var(--text-muted)" stroke-dasharray="3 3"/>`;
+    svg += `<circle cx="${hx}" cy="${hy}" r="5" fill="var(--series)" stroke="var(--surface-1)" stroke-width="2"/>`;
+    const left = Math.min(Math.max(hx, 60), W - 60);
+    tip = `<div class="tooltip" style="left:${left}px;top:${Math.max(hy - 10, 30)}px;opacity:1">
+      <b>${s.fmt(best.v)}${s.suffix()}</b><br>${timeFmtSec.format(best.t * 1000)}</div>`;
+  }
+  svg += `<rect x="${m.l}" y="0" width="${W - m.l - m.r}" height="${H}" fill="transparent" class="hit"/></svg>`;
+  el.innerHTML = svg + tip;
+
+  const hit = el.querySelector(".hit");
+  const onMove = e => {
+    const rect = el.getBoundingClientRect();
+    const px = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    hoverT = t0 + (px - m.l) / (W - m.l - m.r) * (t1 - t0);
+    drawAll();
+  };
+  hit.addEventListener("mousemove", onMove);
+  hit.addEventListener("touchmove", onMove, { passive: true });
+  hit.addEventListener("mouseleave", () => { hoverT = null; drawAll(); });
+}
+
+let raf = 0;
+function drawAll() {
+  cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(() => document.querySelectorAll(".chart").forEach(drawChart));
+}
+
+// Change over the trailing window, if enough history exists.
+function delta(get, seconds) {
+  if (readings.length < 2) return null;
+  const last = readings[readings.length - 1], target = last.t - seconds;
+  if (readings[0].t > target + 60) return null;
+  let past = readings[0];
+  for (const r of readings) { if (r.t > target) break; past = r; }
+  return get(last) - get(past);
+}
+
+function updateTiles() {
+  const r = readings[readings.length - 1];
+  if (!r) return;
+  const tU = unit === "f" ? "°F" : "°C";
+  $("vTemp").innerHTML = `${SERIES.temp.get(r).toFixed(1)}<small>${tU}</small>`;
+  $("vHum").innerHTML = `${r.humidity.toFixed(0)}<small>%</small>`;
+  $("vPres").innerHTML = `${r.pressure.toFixed(1)}<small>hPa</small>`;
+  $("vRain").innerHTML = `${r.rain_label ? r.rain_label[0].toUpperCase() + r.rain_label.slice(1) : "–"}<small>${r.rain_pct.toFixed(0)}%</small>`;
+
+  const dT = delta(SERIES.temp.get, 3600);
+  $("sTemp").textContent = dT === null ? `${unit === "f" ? r.temp_c.toFixed(1) + " °C" : r.temp_f.toFixed(1) + " °F"}` :
+    `${dT >= 0 ? "▲" : "▼"} ${Math.abs(dT).toFixed(1)}${tU} in the last hour`;
+  const dH = delta(x => x.humidity, 3600);
+  $("sHum").textContent = dH === null ? "" : `${dH >= 0 ? "▲" : "▼"} ${Math.abs(dH).toFixed(0)} pts in the last hour`;
+
+  const dP = delta(x => x.pressure, 3 * 3600) ?? delta(x => x.pressure, 1800);
+  const window = delta(x => x.pressure, 3 * 3600) !== null ? "3 h" : "30 min";
+  if (dP !== null) {
+    const word = Math.abs(dP) < 0.5 ? "Steady" : dP > 0 ? "Rising" : "Falling";
+    const arrow = Math.abs(dP) < 0.5 ? "▶" : dP > 0 ? "▲" : "▼";
+    $("sPres").textContent = `${arrow} ${word}: ${dP >= 0 ? "+" : ""}${dP.toFixed(1)} hPa / ${window}`;
+  } else {
+    $("sPres").textContent = r.trend ? `Board says: ${r.trend}` : "";
+  }
+  $("sRain").textContent = `Updated ${timeFmtSec.format(r.t * 1000)}`;
+}
+
+function updateTable() {
+  const rows = readings.slice(-50).reverse().map(r =>
+    `<tr><td>${timeFmtSec.format(r.t * 1000)}</td><td>${SERIES.temp.get(r).toFixed(1)}${unit === "f" ? " °F" : " °C"}</td>
+     <td>${r.humidity.toFixed(0)}%</td><td>${r.pressure.toFixed(1)} hPa</td><td>${r.rain_label} (${r.rain_pct.toFixed(0)}%)</td></tr>`);
+  $("tbody").innerHTML = rows.join("");
+}
+
+function render() { updateTiles(); updateTable(); drawAll(); }
+
+function setStatus(st) {
+  const c = $("conn");
+  c.classList.toggle("live", !!st.connected);
+  c.classList.toggle("down", !st.connected);
+  $("connText").textContent = st.connected ? `Live · ${st.port.replace("/dev/", "")}` : "Board disconnected — waiting…";
+  if (st.last_line) $("raw").textContent = `Last line from board: ${st.last_line}`;
+}
+
+document.querySelectorAll("#range button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#range button").forEach(o => o.setAttribute("aria-pressed", o === b));
+  rangeMin = +b.dataset.min; drawAll();
+}));
+document.querySelectorAll("#units button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("#units button").forEach(o => o.setAttribute("aria-pressed", o === b));
+  unit = b.dataset.u; $("tempUnit").textContent = unit === "f" ? "°F" : "°C";
+  try { localStorage.setItem("unit", unit); } catch {}
+  render();
+}));
+try { const u = localStorage.getItem("unit"); if (u) document.querySelector(`#units [data-u="${u}"]`).click(); } catch {}
+
+new ResizeObserver(drawAll).observe(document.querySelector(".charts"));
+
+function addReading(r) {
+  readings.push(r);
+  if (readings.length > 50000) readings.shift();
+}
+
+// Some proxies (e.g. Cloudflare quick tunnels) buffer the live stream; if nothing arrives, poll instead.
+function startPolling() {
+  setInterval(() => {
+    const since = readings.length ? readings[readings.length - 1].t : 0;
+    fetch("/latest?since=" + since).then(r => r.json()).then(j => {
+      j.readings.forEach(addReading); setStatus(j.status);
+      if (j.readings.length) render();
+    }).catch(() => setStatus({ connected: false }));
+  }, 2000);
+}
+
+fetch("/history").then(r => r.json()).then(j => {
+  readings.push(...j.readings); setStatus(j.status); render();
+  const es = new EventSource("/events");
+  let heard = false;
+  es.addEventListener("reading", e => {
+    heard = true;
+    addReading(JSON.parse(e.data));
+    render();
+  });
+  es.addEventListener("status", e => { heard = true; setStatus(JSON.parse(e.data)); });
+  es.onerror = () => { if (heard) setStatus({ connected: false }); };
+  setTimeout(() => { if (!heard) { es.close(); startPolling(); } }, 5000);
+});
+</script>
+</body>
+</html>
